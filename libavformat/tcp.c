@@ -235,7 +235,7 @@ static int tcp_write(URLContext *h, const uint8_t *buf, int size)
             return ret;
     }
 
-    if(!strstr(h->filename, "myqcloud")) { //腾讯云
+    if(!h->bhu_flag && !strstr(h->filename, "myqcloud")) { //腾讯云
         struct timeval timestamp;
         unsigned char head[13];
         gettimeofday(&timestamp, NULL);

@@ -369,11 +369,13 @@ static inline int retry_transfer_wrapper(URLContext *h, uint8_t *buf,
     int fast_retries = 5;
     int64_t wait_since = 0;
 
+    h->bhu_flag = 0;
     len = 0;
     while (len < size_min) {
         if (ff_check_interrupt(&h->interrupt_callback))
             return AVERROR_EXIT;
         ret = transfer_func(h, buf + len, size - len);
+        h->bhu_flag = 1;
         if (ret == AVERROR(EINTR))
             continue;
         if (h->flags & AVIO_FLAG_NONBLOCK)
