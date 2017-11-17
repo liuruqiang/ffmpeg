@@ -31,7 +31,6 @@
 #if HAVE_POLL_H
 #include <poll.h>
 #endif
-#include <sys/time.h>
 
 typedef struct TCPContext {
     const AVClass *class;
@@ -233,17 +232,6 @@ static int tcp_write(URLContext *h, const uint8_t *buf, int size)
         ret = ff_network_wait_fd_timeout(s->fd, 1, h->rw_timeout, &h->interrupt_callback);
         if (ret)
             return ret;
-    }
-
-    if(!h->bhu_flag && !strstr(h->filename, "myqcloud")) { //腾讯云
-        struct timeval timestamp;
-        unsigned char head[13];
-        gettimeofday(&timestamp, NULL);
-        head[0] = 5;
-        *((int *)(head + 1)) = size;
-        *((int *)(head + 5)) = (int)timestamp.tv_sec;
-        *((int *)(head + 9)) = (int)timestamp.tv_usec;
-        ret = send(s->fd, head, sizeof(head),  MSG_NOSIGNAL);
     }
 
     ret = send(s->fd, buf, size, MSG_NOSIGNAL);
