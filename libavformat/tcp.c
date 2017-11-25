@@ -31,6 +31,8 @@
 #if HAVE_POLL_H
 #include <poll.h>
 #endif
+#include "fftools/cmdutils.h"
+#include <pthread.h>
 
 typedef struct TCPContext {
     const AVClass *class;
@@ -61,6 +63,33 @@ static const AVClass tcp_class = {
     .option     = options,
     .version    = LIBAVUTIL_VERSION_INT,
 };
+
+struct bhu_pkt {
+    int size;
+    int index;
+    uint8_t mac[6];
+}__attribute__((packed));
+static struct bhu_pkt *bhupkt = NULL;
+
+struct bhu_buf {
+    uint8_t *buf;
+    int size;
+};
+static struct bhu_buf bhubuf = {.buf = NULL, .size = 0};
+
+static void tcp_bhu_free(void)
+{
+    if(bhubuf.buf) {
+        free(bhubuf.buf);
+        bhubuf.buf = NULL;
+        bhubuf.size = 0;
+    }
+    if(bhupkt) {
+        free(bhupkt);
+        bhupkt = NULL;
+    }
+    return;
+}
 
 /* return non zero if error */
 static int tcp_open(URLContext *h, const char *uri, int flags)
@@ -223,6 +252,66 @@ static int tcp_read(URLContext *h, uint8_t *buf, int size)
     return ret < 0 ? ff_neterrno() : ret;
 }
 
+//static FILE *f = NULL;
+static int __tcp_bhu_write(URLContext *h, const uint8_t *buf, int size)
+{
+    TCPContext *s = h->priv_data;
+    int ret, snd = 0;
+    while(snd < size) {
+        ret = send(s->fd, buf+snd, size-snd, MSG_NOSIGNAL);
+        if(ret <= 0) {
+            if(errno == EAGAIN) {
+                continue;
+            } else {
+                av_log(h, AV_LOG_ERROR,
+                        "send bhu pkt failed\n");
+                return ff_neterrno();
+            }
+        } else {
+            snd += ret;
+        }
+    }
+
+    return snd;
+}
+
+static int tcp_bhu_write(URLContext *h, const uint8_t *buf, int size)
+{
+    int len, ret;
+
+    if(!bhupkt) {
+        bhupkt = (struct bhu_pkt *)malloc(sizeof(*bhupkt));
+        if(!bhupkt) {
+            av_log(h, AV_LOG_ERROR,
+                    "Failed to malloc\n");
+            return AVERROR(ENOMEM);
+        }
+        bhupkt->index = htonl(get_camera_index());
+        memcpy(bhupkt->mac, get_device_macaddr(), sizeof(bhupkt->mac));
+    }
+
+    bhupkt->size = htonl(size);
+
+    len = sizeof(*bhupkt);
+    ret = __tcp_bhu_write(h, (uint8_t *)bhupkt, len);
+    if(ret != len) {
+        av_log(h, AV_LOG_ERROR,
+                "%s[%d], send failed, len %d, ret %d\n", __func__, __LINE__, len, ret);
+        return ret;//cur-buf;
+    }
+
+    len = size;
+    ret = __tcp_bhu_write(h, buf, len);
+    if(ret != len) {
+        av_log(h, AV_LOG_ERROR,
+                "%s[%d], send failed, len %d, ret %d\n", __func__, __LINE__, len, ret);
+        return ret;//cur-buf;
+    }
+
+    //printf("send success len %d\n", len);
+    return size;
+}
+
 static int tcp_write(URLContext *h, const uint8_t *buf, int size)
 {
     TCPContext *s = h->priv_data;
@@ -234,8 +323,106 @@ static int tcp_write(URLContext *h, const uint8_t *buf, int size)
             return ret;
     }
 
-    ret = send(s->fd, buf, size, MSG_NOSIGNAL);
-    return ret < 0 ? ff_neterrno() : ret;
+    //printf("%s: need send %d\n", __func__, size);
+
+    if(bhu_flag) {
+        int i, reserv = 0, len = 0;
+        uint8_t flag1[] = {0,0,0,1};
+        const uint8_t *last = NULL, *pos = buf;
+
+        for(i=0,pos=buf; i<size-4; i++,pos++) {
+            if(!memcmp(pos, flag1, 4)) {
+                if(pos == buf) { //开头就是
+                    if(bhubuf.buf) {
+                        ret = tcp_bhu_write(h, bhubuf.buf, bhubuf.size);
+                        if(ret < 0) {
+                            av_log(h, AV_LOG_ERROR,
+                                    "%s[%d], send failed, len %d, ret %d\n", __func__, __LINE__, len, ret);
+                            goto failed;
+                        }
+                        free(bhubuf.buf);
+                        bhubuf.buf = NULL;
+                        bhubuf.size = 0;
+                    }
+                } else {
+                    if(last) {
+                        ret = tcp_bhu_write(h, last, pos-last);
+                        if(ret < 0) {
+                            av_log(h, AV_LOG_ERROR,
+                                    "%s[%d], send failed, len %d, ret %d\n", __func__, __LINE__, len, ret);
+                            goto failed;
+                        }
+                    } else {
+                        if(bhubuf.buf) {
+                            len = bhubuf.size+(pos-buf);
+                            bhubuf.buf = (uint8_t*)realloc(bhubuf.buf, len);
+                            if(!bhubuf.buf) {
+                                av_log(h, AV_LOG_ERROR,
+                                        "Failed to malloc\n");
+                                ret = AVERROR(ENOMEM);
+                                goto failed;
+                            }
+                            memcpy(bhubuf.buf+bhubuf.size, buf, pos-buf);
+                            bhubuf.size += pos-buf;
+
+                            ret = tcp_bhu_write(h, bhubuf.buf, bhubuf.size);
+                            if(ret < 0) {
+                                av_log(h, AV_LOG_ERROR,
+                                        "%s[%d], send failed, len %d, ret %d\n", __func__, __LINE__, len, ret);
+                                goto failed;
+                            }
+                            free(bhubuf.buf);
+                            bhubuf.buf = NULL;
+                            bhubuf.size = 0;
+                        } else {
+                            printf("invlid data\n");
+                        }
+                    }
+                }
+
+                last = pos;
+                i += 3;
+                pos += 3;
+            }
+        }
+
+        if(last) {
+            pos = last;
+            reserv = size - (last - buf);
+        } else {
+            pos = buf;
+            reserv = size;
+        }
+
+        if(reserv) {
+            if(bhubuf.buf) {
+                bhubuf.buf = (uint8_t*)realloc(bhubuf.buf, bhubuf.size+reserv);
+            } else {
+                bhubuf.buf = (uint8_t*)malloc(reserv);
+                bhubuf.size = 0;
+            }
+            if(!bhubuf.buf) {
+                av_log(h, AV_LOG_ERROR,
+                        "Failed to malloc\n");
+                ret =  AVERROR(ENOMEM);
+                goto failed;
+            }
+
+            memcpy(bhubuf.buf+bhubuf.size, pos, reserv);
+            bhubuf.size += reserv;
+        } else {
+            printf("%s[%d]: reserv is 0\n", __func__, __LINE__);
+        }
+
+        return size;
+
+failed:
+        tcp_bhu_free();
+        return ret;
+    } else {
+        ret = send(s->fd, buf, size, MSG_NOSIGNAL);
+        return ret < 0 ? ff_neterrno() : ret;
+    }
 }
 
 static int tcp_shutdown(URLContext *h, int flags)

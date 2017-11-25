@@ -74,6 +74,9 @@ AVDictionary *format_opts, *codec_opts, *resample_opts;
 static FILE *report_file;
 static int report_file_level = AV_LOG_DEBUG;
 int hide_banner = 0;
+int bhu_flag = 0;
+static int camera_index = -1;
+static unsigned char device_macaddr[6] = {0};
 
 enum show_muxdemuxers {
     SHOW_DEFAULT,
@@ -865,6 +868,84 @@ int opt_cpuflags(void *optctx, const char *opt, const char *arg)
 
     av_force_cpu_flags(flags);
     return 0;
+}
+
+int opt_set_camera(void *optctx, const char *opt, const char *arg)
+{
+    char *tail;
+    int index;
+
+    index = strtol(arg, &tail, 10);
+    if (*tail) {
+        av_log(NULL, AV_LOG_FATAL, "Invalid camera \"%s\".\n", arg);
+        exit_program(1);
+    }
+    camera_index = index;
+    printf("%s: index %d, bhu_flag %d\n", __func__, camera_index, bhu_flag);
+    return 0;
+}
+
+int get_camera_index(void) {
+    return camera_index;
+}
+
+static int
+str2mac (const char *str, unsigned char *buf)
+{
+    unsigned int mac[6];
+    int num1=0, num2=0, i=0;
+
+    if(!buf) {
+        printf("%s: invalid out param\n", __func__);
+        return -1;
+    }
+
+    memset(buf, 0, 6);
+    for(i=0; str[i]!='\0'; i++) {
+        if(str[i] == ':')
+            num1 ++;
+        if(str[i] == '-')
+            num2 ++;
+    }
+
+    if(num1 == 5) {
+        i = sscanf(str, "%2x:%2x:%2x:%2x:%2x:%2x",
+                mac, mac+1, mac+2, mac+3, mac+4, mac+5);
+    } else if(num2 == 5) {
+        i = sscanf(str, "%2x-%2x-%2x-%2x-%2x-%2x",
+                mac, mac+1, mac+2, mac+3, mac+4, mac+5);
+    } else {
+        printf("%s: invalid input mac string %s\n", __func__, str);
+        return -1;
+    }
+
+    if (i < 6) {
+        printf("%s: invalid input mac string %s\n", __func__, str);
+        return -1;
+    }
+
+    *(uint8_t *)buf = mac[0];
+    *(uint8_t *)(buf+1)  = mac[1];
+    *(uint8_t *)(buf+2)  = mac[2];
+    *(uint8_t *)(buf+3)  = mac[3];
+    *(uint8_t *)(buf+4)  = mac[4];
+    *(uint8_t *)(buf+5)  = mac[5];
+    return 0;
+}
+
+int opt_set_device(void *optctx, const char *opt, const char *arg)
+{
+    if(str2mac(arg, device_macaddr)) {
+        av_log(NULL, AV_LOG_FATAL, "Invalid device macaddr string \"%s\".\n", arg);
+        exit_program(1);
+    }
+    printf("%s: device macaddr %02x-%02x-%02x-%02x-%02x-%02x\n", __func__, device_macaddr[0], device_macaddr[1],
+        device_macaddr[2], device_macaddr[3], device_macaddr[4], device_macaddr[5]);
+    return 0;
+}
+
+unsigned char * get_device_macaddr(void) {
+    return device_macaddr;
 }
 
 int opt_loglevel(void *optctx, const char *opt, const char *arg)

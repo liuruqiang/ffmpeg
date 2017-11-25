@@ -50,6 +50,7 @@ extern AVDictionary *sws_dict;
 extern AVDictionary *swr_opts;
 extern AVDictionary *format_opts, *codec_opts, *resample_opts;
 extern int hide_banner;
+extern int bhu_flag;
 
 /**
  * Register a program-specific cleanup routine.
@@ -98,6 +99,11 @@ int opt_default(void *optctx, const char *opt, const char *arg);
  * Set the libav* libraries log level.
  */
 int opt_loglevel(void *optctx, const char *opt, const char *arg);
+
+int opt_set_camera(void *optctx, const char *opt, const char *arg);
+int opt_set_device(void *optctx, const char *opt, const char *arg);
+int get_camera_index(void);
+unsigned char *get_device_macaddr(void);
 
 int opt_report(const char *opt);
 
@@ -252,6 +258,9 @@ void show_help_options(const OptionDef *options, const char *msg, int req_flags,
     { "colors",      OPT_EXIT,             { .func_arg = show_colors },      "show available color names" },            \
     { "loglevel",    HAS_ARG,              { .func_arg = opt_loglevel },     "set logging level", "loglevel" },         \
     { "v",           HAS_ARG,              { .func_arg = opt_loglevel },     "set logging level", "loglevel" },         \
+    { "bhu",         OPT_BOOL | OPT_EXPERT, {&bhu_flag},        "for bhu private" },                                    \
+    { "camera",      HAS_ARG,              { .func_arg = opt_set_camera },   "set index of camera", "index" },          \
+    { "device",      HAS_ARG,              { .func_arg = opt_set_device },   "set macaddr of device", "macaddr" },      \
     { "report",      0,                    { (void*)opt_report },            "generate a report" },                     \
     { "max_alloc",   HAS_ARG,              { .func_arg = opt_max_alloc },    "set maximum size of a single allocated block", "bytes" }, \
     { "cpuflags",    HAS_ARG | OPT_EXPERT, { .func_arg = opt_cpuflags },     "force specific cpu flags", "flags" },     \

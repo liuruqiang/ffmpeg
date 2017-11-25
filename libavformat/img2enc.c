@@ -174,17 +174,20 @@ static int write_packet(AVFormatContext *s, AVPacket *pkt)
         av_packet_unref(&pkt2);
         avformat_free_context(fmt);
     } else {
+#if 0
 		/* Begin: liurq@BHU for mjpeg */
-		struct timeval timestamp;
-		unsigned char head[13];
-		gettimeofday(&timestamp, NULL);
-		head[0] = 5;
-		*((int *)(head + 1)) = pkt->size;
-		*((int *)(head + 5)) = (int)timestamp.tv_sec;
-		*((int *)(head + 9)) = (int)timestamp.tv_usec;
-		avio_write(pb[0], head, sizeof(head));
+        if(bhu_flag) {
+            struct timeval timestamp;
+            unsigned char head[13];
+            gettimeofday(&timestamp, NULL);
+            head[0] = 5;
+            *((int *)(head + 1)) = pkt->size;
+            *((int *)(head + 5)) = (int)timestamp.tv_sec;
+            *((int *)(head + 9)) = (int)timestamp.tv_usec;
+            avio_write(pb[0], head, sizeof(head));
+        }
 		/* End */
-
+#endif
         avio_write(pb[0], pkt->data, pkt->size);
     }
     avio_flush(pb[0]);
