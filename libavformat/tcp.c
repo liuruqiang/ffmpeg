@@ -65,8 +65,9 @@ static const AVClass tcp_class = {
 };
 
 struct bhu_pkt {
-    int size;
-    int index;
+    uint32_t size;
+    uint32_t seq;
+    uint8_t index;
     uint8_t mac[6];
 }__attribute__((packed));
 static struct bhu_pkt *bhupkt = NULL;
@@ -261,7 +262,8 @@ static int __tcp_bhu_write(URLContext *h, const uint8_t *buf, int size)
         ret = send(s->fd, buf+snd, size-snd, MSG_NOSIGNAL);
         if(ret <= 0) {
             if(errno == EAGAIN) {
-                continue;
+				av_usleep(10000);
+				continue;
             } else {
                 av_log(h, AV_LOG_ERROR,
                         "send bhu pkt failed\n");
@@ -286,11 +288,12 @@ static int tcp_bhu_write(URLContext *h, const uint8_t *buf, int size)
                     "Failed to malloc\n");
             return AVERROR(ENOMEM);
         }
-        bhupkt->index = htonl(get_camera_index());
+        bhupkt->index = get_camera_index();
         memcpy(bhupkt->mac, get_device_macaddr(), sizeof(bhupkt->mac));
     }
 
     bhupkt->size = htonl(size);
+    bhupkt->seq = htonl(get_sequence());
 
     len = sizeof(*bhupkt);
     ret = __tcp_bhu_write(h, (uint8_t *)bhupkt, len);

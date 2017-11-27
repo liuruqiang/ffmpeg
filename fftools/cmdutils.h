@@ -51,6 +51,7 @@ extern AVDictionary *swr_opts;
 extern AVDictionary *format_opts, *codec_opts, *resample_opts;
 extern int hide_banner;
 extern int bhu_flag;
+extern int bhu_img;
 
 /**
  * Register a program-specific cleanup routine.
@@ -102,8 +103,9 @@ int opt_loglevel(void *optctx, const char *opt, const char *arg);
 
 int opt_set_camera(void *optctx, const char *opt, const char *arg);
 int opt_set_device(void *optctx, const char *opt, const char *arg);
-int get_camera_index(void);
+unsigned char get_camera_index(void);
 unsigned char *get_device_macaddr(void);
+unsigned int get_sequence(void);
 
 int opt_report(const char *opt);
 
@@ -259,6 +261,7 @@ void show_help_options(const OptionDef *options, const char *msg, int req_flags,
     { "loglevel",    HAS_ARG,              { .func_arg = opt_loglevel },     "set logging level", "loglevel" },         \
     { "v",           HAS_ARG,              { .func_arg = opt_loglevel },     "set logging level", "loglevel" },         \
     { "bhu",         OPT_BOOL | OPT_EXPERT, {&bhu_flag},        "for bhu private" },                                    \
+    { "bhuimg",      OPT_BOOL | OPT_EXPERT, {&bhu_img},         "for bhu image private" },                                    \
     { "camera",      HAS_ARG,              { .func_arg = opt_set_camera },   "set index of camera", "index" },          \
     { "device",      HAS_ARG,              { .func_arg = opt_set_device },   "set macaddr of device", "macaddr" },      \
     { "report",      0,                    { (void*)opt_report },            "generate a report" },                     \

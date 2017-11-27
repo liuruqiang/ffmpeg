@@ -75,7 +75,8 @@ static FILE *report_file;
 static int report_file_level = AV_LOG_DEBUG;
 int hide_banner = 0;
 int bhu_flag = 0;
-static int camera_index = -1;
+int bhu_img = 0;
+static unsigned char camera_index = -1;
 static unsigned char device_macaddr[6] = {0};
 
 enum show_muxdemuxers {
@@ -873,9 +874,9 @@ int opt_cpuflags(void *optctx, const char *opt, const char *arg)
 int opt_set_camera(void *optctx, const char *opt, const char *arg)
 {
     char *tail;
-    int index;
+    unsigned char index;
 
-    index = strtol(arg, &tail, 10);
+    index = (unsigned char)strtol(arg, &tail, 10);
     if (*tail) {
         av_log(NULL, AV_LOG_FATAL, "Invalid camera \"%s\".\n", arg);
         exit_program(1);
@@ -885,7 +886,7 @@ int opt_set_camera(void *optctx, const char *opt, const char *arg)
     return 0;
 }
 
-int get_camera_index(void) {
+unsigned char get_camera_index(void) {
     return camera_index;
 }
 
@@ -946,6 +947,11 @@ int opt_set_device(void *optctx, const char *opt, const char *arg)
 
 unsigned char * get_device_macaddr(void) {
     return device_macaddr;
+}
+
+unsigned int get_sequence(void) {
+    static unsigned int seq = 0;
+    return seq++;
 }
 
 int opt_loglevel(void *optctx, const char *opt, const char *arg)

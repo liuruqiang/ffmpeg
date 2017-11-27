@@ -32,6 +32,7 @@
 #include "internal.h"
 #include "img2.h"
 #include <sys/time.h>
+#include <fftools/cmdutils.h>
 
 typedef struct VideoMuxData {
     const AVClass *class;  /**< Class for private options. */
@@ -174,9 +175,8 @@ static int write_packet(AVFormatContext *s, AVPacket *pkt)
         av_packet_unref(&pkt2);
         avformat_free_context(fmt);
     } else {
-#if 0
 		/* Begin: liurq@BHU for mjpeg */
-        if(bhu_flag) {
+        if(bhu_img) {
             struct timeval timestamp;
             unsigned char head[13];
             gettimeofday(&timestamp, NULL);
@@ -187,7 +187,6 @@ static int write_packet(AVFormatContext *s, AVPacket *pkt)
             avio_write(pb[0], head, sizeof(head));
         }
 		/* End */
-#endif
         avio_write(pb[0], pkt->data, pkt->size);
     }
     avio_flush(pb[0]);
